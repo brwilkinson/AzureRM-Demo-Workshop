@@ -1,0 +1,275 @@
+﻿{
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "DeploymentType": {
+      "type": "string",
+      "defaultValue": "Dev",
+      "allowedValues": [
+        "Dev",
+        "Test",
+        "Prod"
+      ],
+      "metadata": {
+        "description": "Deployment Category"
+      }
+    },
+    "DeploymentIndex": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 3,
+      "defaultValue": "001",
+      "metadata": {
+        "description": "Deployment Index to iterate through deployments"
+      }
+    },
+    "Prefix": {
+      "type": "string",
+      "defaultValue": "BRW"
+    },
+    "StorageType": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_ZRS",
+        "Standard_GRS",
+        "Standard_RAGRS",
+        "Premium_LRS"
+      ]
+    },
+    "vmName": {
+      "type": "string",
+      "defaultValue": "MS1"
+    },
+    "vmNameAdminUserName": {
+      "defaultValue": "BRW",
+      "type": "string",
+      "minLength": 1
+    },
+    "vmNameAdminPassword": {
+      "type": "securestring"
+    },
+    "vmNameWindowsOSVersion": {
+      "type": "string",
+      "defaultValue": "2012-R2-Datacenter",
+      "allowedValues": [
+        "2008-R2-SP1",
+        "2012-Datacenter",
+        "2012-R2-Datacenter",
+        "Windows-Server-Technical-Preview"
+      ]
+    },
+      "_artifactsLocation": {
+          "type": "string",
+          "metadata": {
+              "description": "Auto-generated container in staging storage account to receive post-build staging folder upload"
+          }
+      },
+      "_artifactsLocationSasToken": {
+          "type": "securestring",
+          "metadata": {
+              "description": "Auto-generated token to access _artifactsLocation"
+          }
+      }
+  },
+  "variables": {
+    "Deployment": "[concat(parameters('Prefix'), parameters('DeploymentType'), padLeft( parameters('DeploymentIndex'),3,'0'))]",
+    "saName": "[toLower(concat('sa', variables('Deployment')))]",
+
+    "VNetName": "[concat('vn', variables('Deployment'))]",
+
+    "vnNamePrefix": "10.0.0.0/16",
+    "vnNameSubnet1Name": "Subnet-1",
+    "vnNameSubnet1Prefix": "10.0.0.0/24",
+
+    // vmMS1_BRWDev001
+    "vmName": "[concat('vm', parameters('vmName'), '_', variables('Deployment') )]",
+
+    // Nic
+    "NIC_vmName": "[concat('NIC_', parameters('vmName')) ]",
+    "NIC_vmNameVnetID": "[resourceId('Microsoft.Network/virtualNetworks', variables('VNetName'))]",
+    "NIC_vmNameSubnetRef": "[concat(variables('NIC_vmNameVnetID'), '/subnets/', variables('vnNameSubnet1Name'))]",
+
+    // PublicIP
+    "PUBLICIP_VMNameDnsName": "[replace(toLower(variables('vmName')),'_','')]",
+    "PUBLICIP_VMName": "[concat('PUBLICIP_', variables('vmName'))]",
+
+    //VM
+    "vmNameImagePublisher": "MicrosoftWindowsServer",
+    "vmNameImageOffer": "WindowsServer",
+    "vmNameOSDiskName": "vmNameOSDisk",
+    "vmNameVmSize": "Standard_D1",
+    "vmNameVnetID": "[resourceId('Microsoft.Network/virtualNetworks', variables('VNetName'))]",
+    "vmNameSubnetRef": "[concat(variables('vmNameVnetID'), '/subnets/', variables('vnNameSubnet1Name'))]",
+    "vmNameStorageAccountContainerName": "vhds",
+      "VMDSCConfigurationFunction": "VMDSCConfiguration.ps1\\Main"
+
+  },
+  "resources": [
+    {
+      "name": "[variables('saName')]",
+      "type": "Microsoft.Storage/storageAccounts",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-15",
+      "dependsOn": [],
+      "tags": {
+        "displayName": "saname"
+      },
+      "properties": {
+        "accountType": "[parameters('StorageType')]"
+      }
+    },
+    {
+      "name": "[variables('VNetName')]",
+      "type": "Microsoft.Network/virtualNetworks",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-15",
+      "dependsOn": [],
+      "tags": {
+        "displayName": "vnName"
+      },
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('vnNamePrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('vnNameSubnet1Name')]",
+            "properties": {
+              "addressPrefix": "[variables('vnNameSubnet1Prefix')]"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('NIC_vmName')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-15",
+      "dependsOn": [
+        "[concat('Microsoft.Network/virtualNetworks/', variables('VNetName'))]",
+        "[concat('Microsoft.Network/publicIPAddresses/', variables('PUBLICIP_VMName'))]"
+      ],
+      "tags": {
+        "displayName": "NIC_vmName"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('NIC_vmNameSubnetRef')]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('PUBLICIP_VMName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('PUBLICIP_VMName')]",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-15",
+      "dependsOn": [],
+      "tags": {
+        "displayName": "PUBLICIP_VMName"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": {
+          "domainNameLabel": "[variables('PUBLICIP_VMNameDnsName')]"
+        }
+      }
+    },
+    {
+      "name": "[variables('vmName')]",
+      "type": "Microsoft.Compute/virtualMachines",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-06-15",
+      "dependsOn": [
+        "[concat('Microsoft.Storage/storageAccounts/', variables('saName'))]",
+        "[concat('Microsoft.Network/networkInterfaces/', variables('NIC_vmName'))]"
+      ],
+      "tags": {
+        "displayName": "vmName"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('vmNameVmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('vmName')]",
+          "adminUsername": "[parameters('vmNameAdminUsername')]",
+          "adminPassword": "[parameters('vmNameAdminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('vmNameImagePublisher')]",
+            "offer": "[variables('vmNameImageOffer')]",
+            "sku": "[parameters('vmNameWindowsOSVersion')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "vmNameOSDisk",
+            "vhd": {
+              "uri": "[concat('http://', variables('saName'), '.blob.core.windows.net/', variables('vmNameStorageAccountContainerName'), '/', variables('vmNameOSDiskName'), '.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('NIC_vmName'))]"
+            }
+          ]
+        }
+      },
+        "resources": [
+            {
+                "name": "VMDSC",
+                "type": "extensions",
+                "location": "[resourceGroup().location]",
+                "apiVersion": "2015-06-15",
+                "dependsOn": [
+                    "[concat('Microsoft.Compute/virtualMachines/', variables('vmName'))]"
+                ],
+                "tags": {
+                    "displayName": "VMDSC"
+                },
+                "properties": {
+                    "publisher": "Microsoft.Powershell",
+                    "type": "DSC",
+                    "typeHandlerVersion": "2.9",
+                    "autoUpgradeMinorVersion": true,
+                    "settings": {
+                        "modulesUrl": "[concat(parameters('_artifactsLocation'), '/', 'dsc.zip')]",
+                        "sasToken": "[parameters('_artifactsLocationSasToken')]",
+                        "configurationFunction": "[variables('VMDSCConfigurationFunction')]",
+                        "properties": {
+                            "nodeName": "localhost"
+                        }
+                    },
+                    "protectedSettings": { }
+                }
+            }
+        ]
+    }
+  ],
+  "outputs": {
+    "MS1-fqdn": {
+      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses',variables('PUBLICIP_VMName')), '2016-07-01').dnsSettings.fqdn]",
+      "type": "string"
+    }
+  }
+}

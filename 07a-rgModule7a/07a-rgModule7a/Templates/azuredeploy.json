@@ -1,0 +1,92 @@
+﻿{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+  "parameters": {
+    "DeploymentType": {
+      "type": "string",
+      "defaultValue": "Dev",
+      "allowedValues": [
+        "Dev",
+        "Test",
+        "Prod"
+      ],
+      "metadata": {
+        "description": "Deployment Category"
+      }
+    },
+    "DeploymentIndex": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 3,
+      "defaultValue": "001",
+      "metadata": {
+        "description": "Deployment Index to iterate through deployments"
+      }
+    },
+    "Prefix": {
+      "type": "string",
+      "defaultValue": "BRW"
+    },
+      "StorageType": {
+          "type": "string",
+          "defaultValue": "Standard_LRS",
+          "allowedValues": [
+              "Standard_LRS",
+              "Standard_ZRS",
+              "Standard_GRS",
+              "Standard_RAGRS",
+              "Premium_LRS"
+          ]
+      }
+  },
+  "variables": {
+    "Deployment": "[concat(parameters('Prefix'), parameters('DeploymentType'), padLeft( parameters('DeploymentIndex'),3,'0'))]",
+    "saName": "[toLower(concat('sa', variables('Deployment')))]",
+    "VNetName": "[concat('vn', variables('Deployment'))]",
+    "vnNamePrefix": "10.0.0.0/16",
+    "vnNameSubnet1Name": "Subnet-1",
+    "vnNameSubnet1Prefix": "10.0.0.0/24"
+  },
+    "resources": [
+      {
+        "name": "[variables('saName')]",
+        "type": "Microsoft.Storage/storageAccounts",
+        "location": "[resourceGroup().location]",
+        "apiVersion": "2015-06-15",
+        "dependsOn": [],
+        "tags": {
+          "displayName": "saname"
+        },
+        "properties": {
+          "accountType": "[parameters('StorageType')]"
+        }
+      },
+      {
+        "name": "[variables('VNetName')]",
+        "type": "Microsoft.Network/virtualNetworks",
+        "location": "[resourceGroup().location]",
+        "apiVersion": "2015-06-15",
+        "dependsOn": [],
+        "tags": {
+          "displayName": "vnName"
+        },
+        "properties": {
+          "addressSpace": {
+            "addressPrefixes": [
+              "[variables('vnNamePrefix')]"
+            ]
+          },
+          "subnets": [
+            {
+              "name": "[variables('vnNameSubnet1Name')]",
+              "properties": {
+                "addressPrefix": "[variables('vnNameSubnet1Prefix')]"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "outputs": {
+    }
+}

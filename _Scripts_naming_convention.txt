@@ -1,0 +1,6 @@
+Module#, Demo# (letter), Name (Description of demo).ps1
+E.g.
+01a-Intro.ps1
+01b-Tools.ps1
+02a-ExploringResources.ps1
+02b-ExploringSchemas.ps1
